@@ -262,9 +262,15 @@ func getSqliteSchema(db *sql.DB) (se SchemaEntries, err error) {
 	defer rows.Close()
 	for rows.Next() {
 		e := SchemaEntry{}
-		if err := rows.Scan(&e.Type, &e.Name, &e.TableName, &e.SQL); err != nil {
+		// sqlite_master.sql is NULL for implicitly created entries — notably the
+		// sqlite_autoindex_* rows backing UNIQUE / composite-or-TEXT PRIMARY KEY
+		// constraints. Scan into a NullString so NULL becomes "" (harmless: those
+		// rows are matched by name prefix downstream) while real errors still fail.
+		var sqlText sql.NullString
+		if err := rows.Scan(&e.Type, &e.Name, &e.TableName, &sqlText); err != nil {
 			return nil, err
 		}
+		e.SQL = sqlText.String
 		ret = append(ret, e)
 	}
 	return ret, rows.Err()
